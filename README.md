@@ -18,8 +18,10 @@ scale and card layout), expanded into a full four-tab native app.
   call, nothing sent anywhere). Confident answers are shown inline with their source; uncertain
   matches are offered as tappable "closest topics" instead of guessing.
 - **Updates** — a feed of FTA/MoF/IASB decisions, guidelines and public clarifications, each
-  with a one-line plain-English summary, an unread badge on the tab icon, and a local push
-  notification the first time the device sees a new item (`expo-notifications`).
+  with a one-line plain-English summary, an unread badge on the tab icon, pull-to-refresh, and a
+  notification the first time the device sees a new item. Works fully offline against bundled
+  seed data out of the box; point it at the backend in `backend/` (see below) for a live feed
+  and real server-sent push.
 - **About & sources** — scope, disclaimer, and links to the primary government/standard-setter
   sources.
 
@@ -42,23 +44,36 @@ npm run android     # Android emulator
 npm run web         # Runs in a browser via react-native-web (handy for quick UI iteration)
 ```
 
+Runs fully offline with zero setup — Updates and Ask both work against bundled data. To connect
+the live backend (see `backend/README.md`):
+
+```bash
+cp .env.example .env
+# edit .env: EXPO_PUBLIC_API_BASE_URL=https://your-deployed-backend.example.com
+npm run start
+```
+
 ## Project structure
 
 ```
 App.tsx                        # font loading, providers, navigation container
 src/
+  config.ts                    # EXPO_PUBLIC_API_BASE_URL — unset means "offline, bundled data"
   data/
     knowledgeBase.ts           # the Q&A reference content (13 categories, 60+ entries)
-    updates.ts                 # seed feed of FTA/MoF/IASB updates
+    updates.ts                 # bundled offline seed/fallback feed of FTA/MoF/IASB updates
   services/
     answerEngine.ts            # on-device question -> knowledge-base matching
-    notifications.ts           # expo-notifications wrapper (local notifications only)
+    notifications.ts           # expo-notifications wrapper (local notifications)
+    updatesApi.ts               # fetches live updates from backend/, null on any failure
+    pushRegistration.ts         # registers this device for real server-sent push
   context/
-    UpdatesContext.tsx         # unread tracking + "notify once per new update" logic
+    UpdatesContext.tsx         # live fetch + fallback, unread tracking, notify-new-items logic
   navigation/                  # bottom tabs + per-tab stacks
   screens/                     # Home, Category, Detail, Search, Ask, Updates, About
   components/UI.tsx            # shared cards/rows/pills styled from theme/theme.ts
   theme/theme.ts                # colors/fonts ported from the reference CSS
+backend/                       # live FTA/MoF feed: scraper + review queue + push — see backend/README.md
 ```
 
 ## Scope and disclaimer
@@ -83,19 +98,38 @@ user's question. To upgrade "Ask a Consultant" to a generative assistant:
    (source links, alternatives list) keeps working unchanged.
 3. Keep the local `answerEngine.ts` as an offline fallback for when the network is unavailable.
 
-## Wiring a real FTA feed
+## The live FTA/MoF feed (`backend/`)
 
-`src/data/updates.ts` is a static seed array today. To make "Updates" a live feed:
+`backend/` is a real, deployable Node service that:
 
-1. Stand up a scheduled job (cron / cloud function) that polls the FTA/MoF publications pages
-   (or an internal content pipeline that summarises them) and writes new entries — matching the
-   `RegUpdate` shape in `src/types/index.ts` — to a small backend API or database.
-2. In `src/context/UpdatesContext.tsx`, replace the `sortedUpdates()` import with a `fetch`
-   against that API (e.g. on app foreground, or via a background fetch task), diffing against
-   the last-seen IDs already tracked in `AsyncStorage`.
-3. The existing unread-badge and "notify once per new item" logic (`notifyNewUpdate` in
-   `src/services/notifications.ts`) needs no changes — it already keys off update `id`, so newly
-   fetched items are picked up automatically.
-4. For a notification that fires even when the app isn't open, add a push-notification token
-   flow (`expo-notifications` push, not local) and have your backend push to devices when it
-   detects a new publication, rather than relying on the app being opened to notice it.
+- serves published updates to `GET /api/updates` (the app fetches this in
+  `UpdatesContext.tsx`, falling back to the bundled seed if unreachable — the app never breaks
+  from a backend outage, it just goes offline-static);
+- scrapes candidate new items from FTA/MoF publication pages on a schedule and queues them as
+  `pending` for human review (never auto-publishes — see below for why);
+- dispatches a real push notification via Expo's push service to every registered device when a
+  curator publishes an item, so it reaches phones even when the app isn't open.
+
+**Read `backend/README.md` before trusting the scraper against production**: it was built and
+tested in a sandbox with no outbound network access to `tax.gov.ae`/`mof.gov.ae`, so the listing
+URLs and CSS-selector guessing are unverified against the real site — only against synthetic
+fixtures. The rest of the backend (API, review-queue workflow, push dispatch, data persistence)
+was fully exercised end to end, including the compiled production build. The review-queue design
+is deliberate independent of that gap, too: a scraper shouldn't be trusted to write a
+"simplified summary" of tax law on its own — a human fills in `summary`/`detail` before anything
+publishes.
+
+To connect the app:
+
+```bash
+# in backend/
+cp .env.example .env   # set ADMIN_API_KEY
+npm install && npm run dev
+
+# in the project root
+cp .env.example .env   # set EXPO_PUBLIC_API_BASE_URL=http://localhost:4000 (or your deployed URL)
+npm run start
+```
+
+See `backend/README.md` for the full API reference, Docker/Render/Railway deployment steps, and
+how to enable real (app-closed) push notifications via `eas init`.

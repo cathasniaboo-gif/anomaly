@@ -1,0 +1,153 @@
+# UAE Reg backend
+
+The live data source behind the mobile app's **Updates** tab and (optionally) real push
+notifications. It does three things:
+
+1. **Serves published updates** to the app: `GET /api/updates`.
+2. **Discovers candidate new updates** from FTA/MoF publication pages on a schedule, and queues
+   them as `pending` for human review — it never auto-publishes a scraped item.
+3. **Publishes reviewed updates and pushes to registered devices** when a curator approves one.
+
+## ⚠️ Read this before trusting the scraper
+
+This backend was built in a sandboxed environment with **no outbound network access to
+`tax.gov.ae`, `mof.gov.ae`, or almost anything outside npm/GitHub** — confirmed by testing (see
+`test/scraper.smoke.ts` output and the run log below). That means:
+
+- The listing URLs in `src/scraper/sources.ts` are **best-effort guesses**, not confirmed
+  current pages — government sites restructure without notice.
+- The selector-guessing logic in `src/scraper/parseListing.ts` was validated against synthetic
+  fixtures (`test/fixtures/*.html`, representing a table layout and a card/Drupal-style layout —
+  run `npm run smoke:scraper` to see it pass), **never against the real markup**.
+- When I ran `POST /api/admin/scrape/run` against the real URLs from this environment, it
+  correctly failed closed rather than crashing or fabricating data:
+  ```
+  "message": "Fetch failed: HTTP 403. Check listUrl in sources.ts is still current, and that
+  this host can reach https://tax.gov.ae."
+  ```
+  That 403 is this sandbox's own network policy blocking the request — not evidence the scraper
+  works against the real site. It proves the *failure path* works cleanly, nothing more.
+
+**Before relying on this in production:**
+
+1. From a machine with normal internet access, open each `listUrl` in `sources.ts` and confirm
+   it's still the right page.
+2. Run `npm run scrape:once` (or `POST /api/admin/scrape/run`) against the real site and check
+   `GET /api/admin/scrape/runs`. If `found` is 0, or `message` mentions no selector scoring well,
+   `parseListing.ts` needs a selector added for that page's actual structure — or the page
+   renders its list client-side, in which case swap `fetchHtml.ts` for a headless-browser fetch
+   (e.g. Playwright, already used elsewhere in this repo for testing the mobile app).
+3. Check the site's terms of use / `robots.txt` for automated-access restrictions before
+   scraping it on a schedule.
+
+Because of this gap, the design leans on a human review step rather than trusting the scraper
+end to end: a scraped item lands as `pending` with only a title/date/link and a raw excerpt —
+nothing reaches an end user's phone until a curator has written the plain-English summary and
+published it via the admin API. That review gate is also just good practice for anything
+claiming to simplify tax law, independent of the scraper's reliability.
+
+## API
+
+All responses are JSON.
+
+### Public (used by the mobile app)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/health` | liveness check |
+| GET | `/api/updates` | published updates, newest first. `?since=<ISO timestamp>` filters to items updated after that time |
+| GET | `/api/updates/:id` | one published update |
+| POST | `/api/devices/register` | `{ token, platform }` — registers an Expo push token |
+| DELETE | `/api/devices/:token` | unregister |
+
+### Admin (require header `x-admin-key: <ADMIN_API_KEY>`)
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/admin/updates?status=pending\|published` | review queue |
+| POST | `/api/admin/updates` | create an update directly. `status: "pending"` needs only title/date/authority/kind/source; `status: "published"` (default) also requires `summary` + `detail`, and dispatches push immediately |
+| PATCH | `/api/admin/updates/:id` | edit any field; setting `status: "published"` on a pending item validates content and dispatches push (once, tracked via an internal `notified` flag) |
+| DELETE | `/api/admin/updates/:id` | remove |
+| POST | `/api/admin/scrape/run` | trigger a scrape cycle immediately (in addition to the cron schedule) |
+| GET | `/api/admin/scrape/runs` | last 50 scrape run results, for diagnosing selector drift |
+
+## Running it
+
+```bash
+cp .env.example .env
+# edit .env — at minimum set ADMIN_API_KEY to something random:
+#   node -e "console.log(require('crypto').randomUUID())"
+
+npm install
+npm run dev          # ts-node-dev, auto-reload
+# or:
+npm run build && npm start
+```
+
+Curate your first update by hand (works with zero scraper calibration):
+
+```bash
+curl -X POST http://localhost:4000/api/admin/updates \
+  -H "x-admin-key: $ADMIN_API_KEY" -H "Content-Type: application/json" \
+  -d '{
+    "authority": "FTA", "kind": "Decision", "title": "...",
+    "date": "2026-08-01", "summary": "...", "detail": "...",
+    "relatedCats": ["Corporate Tax"],
+    "sourceLabel": "Cabinet Decision No. ...", "sourceUrl": "https://tax.gov.ae/..."
+  }'
+```
+
+## Deploying
+
+The service is stateless code + one JSON-file-backed data directory (see "Scaling the
+datastore" below) — any small Node host works. Two straightforward options:
+
+**Docker** (works anywhere that runs containers — Render, Railway, Fly.io, a VPS):
+
+```bash
+docker build -t uae-reg-backend .
+docker run -d -p 4000:4000 \
+  -e ADMIN_API_KEY=... \
+  -v uae-reg-data:/app/data \
+  uae-reg-backend
+```
+
+The `-v` volume mount is not optional in production — without it, every redeploy wipes the
+review queue, the scraper's dedup index (so it re-discovers and re-queues everything), and the
+device registry (so existing devices stop getting push until they reopen the app).
+
+**Render / Railway / Fly.io** (no Docker needed): point the platform's Node buildpack at this
+`backend/` directory, build command `npm ci && npm run build`, start command `npm start`, and
+attach a persistent disk/volume mounted at the path you set as `DATA_DIR`. Set `ADMIN_API_KEY`
+(and optionally `SCRAPE_CRON`) as environment variables in the platform's dashboard.
+
+Whichever host you pick, note its public URL — the mobile app needs it as
+`EXPO_PUBLIC_API_BASE_URL` (see the root README's mobile-app setup).
+
+## Enabling real push notifications
+
+1. In the mobile app, run `eas init` (needs a free Expo account) to get an EAS project id, and
+   add it to `app.json` as `expo.extra.eas.projectId`.
+2. Set `EXPO_PUBLIC_API_BASE_URL` when building/running the app to point at your deployed
+   backend. On next launch the app registers its Expo push token via `POST
+   /api/devices/register` automatically (`src/services/pushRegistration.ts`).
+3. Publish an update (`POST /api/admin/updates` with `status: "published"`, or `PATCH` a pending
+   one to `published`) — `src/push.ts` dispatches to every registered device via
+   `expo-server-sdk`. Dead tokens (`DeviceNotRegistered`) are pruned automatically.
+
+Note: sending a push still requires this backend to reach Expo's push service
+(`exp.host`/`api.expo.dev`) — outside this development sandbox, so untested here for the same
+reason the scraper is unverified. The dispatch code path itself (chunking, ticket handling,
+stale-token cleanup) is exercised by `push.ts`'s logic and the admin-route smoke test, just not
+an actual delivered notification.
+
+## Scaling the datastore
+
+`src/db.ts` is a small JSON-file store (one file per collection, atomic write-via-rename, a
+write queue that survives a failed write instead of jamming forever) — plenty for the write
+volume here (a handful of new updates a week, occasional device registrations). Its ceiling:
+it's file-based, so only one backend instance can safely write to a given `DATA_DIR` at a time.
+If you need multiple instances behind a load balancer, swap `JsonCollection` for a real database
+(Postgres via `pg`, or SQLite via `better-sqlite3` if a single-writer file-based DB is still
+fine but you want proper querying) — `UpdateRecord`/`DeviceRecord` in `src/types.ts` already
+define the schema to migrate to.

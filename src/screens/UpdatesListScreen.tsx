@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
+import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl } from 'react-native';
+import { HAS_BACKEND } from '../config';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { UpdatesStackParamList } from '../navigation/types';
 import { useUpdates } from '../context/UpdatesContext';
@@ -22,7 +23,7 @@ function formatDate(iso: string) {
 }
 
 export default function UpdatesListScreen({ navigation }: Props) {
-  const { updates, isRead, markRead, markAllRead, unreadCount } = useUpdates();
+  const { updates, isRead, markRead, markAllRead, unreadCount, refresh, refreshing, isLive } = useUpdates();
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
@@ -41,11 +42,24 @@ export default function UpdatesListScreen({ navigation }: Props) {
         data={updates}
         keyExtractor={(u) => u.id}
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        refreshControl={
+          HAS_BACKEND ? (
+            <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.teal} />
+          ) : undefined
+        }
         ListHeaderComponent={
-          <Text style={styles.hero}>
-            New guidelines, decisions and public clarifications from the FTA, MoF and standard
-            setters — with a plain-English summary of what each one actually changes.
-          </Text>
+          <View>
+            <Text style={styles.hero}>
+              New guidelines, decisions and public clarifications from the FTA, MoF and standard
+              setters — with a plain-English summary of what each one actually changes.
+            </Text>
+            <View style={styles.liveRow}>
+              <View style={[styles.liveDot, { backgroundColor: isLive ? colors.teal : colors.textSecondary }]} />
+              <Text style={styles.liveText}>
+                {isLive ? 'Live from backend' : HAS_BACKEND ? 'Connecting…' : 'Bundled offline data (no backend configured)'}
+              </Text>
+            </View>
+          </View>
         }
         ListEmptyComponent={<EmptyState label="No updates yet." />}
         renderItem={({ item }) => {
@@ -77,7 +91,10 @@ export default function UpdatesListScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  hero: { fontSize: 13, color: colors.textSecondary, marginBottom: 16, lineHeight: 19 },
+  hero: { fontSize: 13, color: colors.textSecondary, marginBottom: 10, lineHeight: 19 },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
+  liveDot: { width: 6, height: 6, borderRadius: 3 },
+  liveText: { fontSize: 11, color: colors.textSecondary },
   markAll: { color: '#fff', fontSize: 12.5, fontWeight: '600' },
   card: {
     backgroundColor: colors.panel,
