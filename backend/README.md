@@ -100,9 +100,45 @@ curl -X POST http://localhost:4000/api/admin/updates \
 ## Deploying
 
 The service is stateless code + one JSON-file-backed data directory (see "Scaling the
-datastore" below) — any small Node host works. Two straightforward options:
+datastore" below) — any small Node host works.
 
-**Docker** (works anywhere that runs containers — Render, Railway, Fly.io, a VPS):
+### Render (Blueprint — the fastest path)
+
+`render.yaml` at the repo root already declares the service (build/start commands, health
+check, env vars). I couldn't click through this myself: this backend was built in a sandbox
+whose network policy blocks `api.render.com` (same allowlist issue that blocks
+`tax.gov.ae` — confirmed by testing, not assumed), and I have no Render account credentials
+regardless. It's a real ~2 minute manual step on your end:
+
+1. Push this repo (or this branch) to GitHub if it isn't already — Render deploys from a Git
+   connection, not a file upload.
+2. In the [Render dashboard](https://dashboard.render.com): **New +** → **Blueprint** → connect
+   this repo → pick the branch that has `render.yaml` (repo root) → **Apply**.
+3. Render finds `render.yaml`, and prompts you for the one secret it deliberately doesn't
+   commit: `ADMIN_API_KEY`. Generate one first — `node -e "console.log(require('crypto').randomUUID())"`
+   — and paste it in. Save it somewhere; it's how the admin API authenticates you.
+4. Click **Deploy**. First build takes a couple of minutes (`npm ci && npm run build`); Render
+   then health-checks `GET /api/health` and brings the service up at
+   `https://uae-reg-backend-<random>.onrender.com` (or whatever name you gave the Blueprint).
+5. Verify it yourself before wiring the app — from any machine with normal internet access:
+   ```bash
+   curl https://<your-service>.onrender.com/api/health
+   ```
+
+**Read this before you rely on it**: the Blueprint defaults to Render's **free plan**, which has
+no persistent disk — `DATA_DIR` is then just an ephemeral directory that resets on every deploy
+and roughly every 15 minutes of inactivity (free instances spin down and lose local disk state
+on the next request, which also means a ~30-60s cold-start delay). That's fine for verifying the
+wiring end-to-end, but it means the review queue, scraper dedup index, and registered device
+tokens don't survive a restart. For real use: in the Render dashboard, change the service's
+instance type off Free, then uncomment the `disk:` block in `render.yaml` and redeploy (or add
+the disk directly in the dashboard's Disks tab) so `/var/data` persists.
+
+Once it's up, come back and give me the URL — I'll wire `EXPO_PUBLIC_API_BASE_URL` in the
+mobile app and verify the app actually talks to it (the same way I verified it against a local
+instance: a real fetch, screenshotted, not just a typecheck).
+
+### Docker (self-host anywhere: a VPS, Fly.io, etc.)
 
 ```bash
 docker build -t uae-reg-backend .
@@ -116,10 +152,12 @@ The `-v` volume mount is not optional in production — without it, every redepl
 review queue, the scraper's dedup index (so it re-discovers and re-queues everything), and the
 device registry (so existing devices stop getting push until they reopen the app).
 
-**Render / Railway / Fly.io** (no Docker needed): point the platform's Node buildpack at this
+### Railway (no Docker needed)
+
+Same shape as Render without a Blueprint file: point Railway's Node buildpack at this
 `backend/` directory, build command `npm ci && npm run build`, start command `npm start`, and
-attach a persistent disk/volume mounted at the path you set as `DATA_DIR`. Set `ADMIN_API_KEY`
-(and optionally `SCRAPE_CRON`) as environment variables in the platform's dashboard.
+attach a persistent volume mounted at the path you set as `DATA_DIR`. Set `ADMIN_API_KEY` (and
+optionally `SCRAPE_CRON`) as environment variables in Railway's dashboard.
 
 Whichever host you pick, note its public URL — the mobile app needs it as
 `EXPO_PUBLIC_API_BASE_URL` (see the root README's mobile-app setup).

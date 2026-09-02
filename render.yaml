@@ -1,0 +1,39 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Lets Render auto-configure the backend/ service instead of clicking
+# through build/start commands by hand. In the Render dashboard:
+#   New + -> Blueprint -> connect this repo -> pick this branch -> Apply.
+# Render finds this file automatically. See backend/README.md for the full
+# walkthrough, including the free-tier persistence caveat below.
+services:
+  - type: web
+    name: uae-reg-backend
+    env: node
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: ADMIN_API_KEY
+        sync: false # Render prompts for this at Blueprint creation; never commit it
+      - key: DATA_DIR
+        value: /var/data
+      - key: DISABLE_SCRAPE_SCHEDULE
+        value: "false"
+      - key: SCRAPE_CRON
+        value: "0 */6 * * *"
+    # Free-tier services have no persistent disk — DATA_DIR above is then
+    # just an ephemeral directory that resets on every deploy and roughly
+    # every 15 minutes of inactivity (free instances spin down and lose
+    # local disk state). Fine for verifying the wiring end-to-end; for real
+    # use, switch `plan` to a paid tier and uncomment this to keep the
+    # review queue, dedup index, and device registry across restarts:
+    # disk:
+    #   name: uae-reg-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
