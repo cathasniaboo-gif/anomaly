@@ -126,13 +126,18 @@ regardless. It's a real ~2 minute manual step on your end:
    ```
 
 **Read this before you rely on it**: the Blueprint defaults to Render's **free plan**, which has
-no persistent disk — `DATA_DIR` is then just an ephemeral directory that resets on every deploy
-and roughly every 15 minutes of inactivity (free instances spin down and lose local disk state
-on the next request, which also means a ~30-60s cold-start delay). That's fine for verifying the
-wiring end-to-end, but it means the review queue, scraper dedup index, and registered device
-tokens don't survive a restart. For real use: in the Render dashboard, change the service's
-instance type off Free, then uncomment the `disk:` block in `render.yaml` and redeploy (or add
-the disk directly in the dashboard's Disks tab) so `/var/data` persists.
+no persistent disk. `render.yaml` deliberately leaves `DATA_DIR` unset in that case — an earlier
+version of this file hardcoded it to `/var/data`, which crashed the app on start with `EACCES:
+permission denied, mkdir '/var/data'`, because that path only exists once a disk is actually
+mounted there. Left unset, the app falls back to a `data/` directory next to its own compiled
+code, which is always writable. On the free plan that's still ephemeral — it resets on every
+deploy and roughly every 15 minutes of inactivity (free instances spin down and lose local disk
+state on the next request, which also means a ~30-60s cold-start delay). That's fine for
+verifying the wiring end-to-end, but it means the review queue, scraper dedup index, and
+registered device tokens don't survive a restart. For real use: in the Render dashboard, change
+the service's instance type off Free, uncomment the `disk:` block in `render.yaml`, **and** add
+a `DATA_DIR=/var/data` environment variable (matching `mountPath`) so the app writes to the
+persisted disk instead of the ephemeral build directory — then redeploy.
 
 Once it's up, come back and give me the URL — I'll wire `EXPO_PUBLIC_API_BASE_URL` in the
 mobile app and verify the app actually talks to it (the same way I verified it against a local

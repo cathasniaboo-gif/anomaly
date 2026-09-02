@@ -21,18 +21,22 @@ services:
         value: "22"
       - key: ADMIN_API_KEY
         sync: false # Render prompts for this at Blueprint creation; never commit it
-      - key: DATA_DIR
-        value: /var/data
       - key: DISABLE_SCRAPE_SCHEDULE
         value: "false"
       - key: SCRAPE_CRON
         value: "0 */6 * * *"
-    # Free-tier services have no persistent disk — DATA_DIR above is then
-    # just an ephemeral directory that resets on every deploy and roughly
-    # every 15 minutes of inactivity (free instances spin down and lose
-    # local disk state). Fine for verifying the wiring end-to-end; for real
-    # use, switch `plan` to a paid tier and uncomment this to keep the
-    # review queue, dedup index, and device registry across restarts:
+    # DATA_DIR is intentionally NOT set here on the free plan: Render's app
+    # process can't mkdir at an arbitrary root-level path like /var/data
+    # unless a disk is actually mounted there (EACCES otherwise — this bit
+    # an earlier version of this file). Left unset, src/db.ts defaults to a
+    # `data` directory next to the compiled app, which is always writable
+    # since the build just wrote to that same tree. On the free plan that's
+    # still ephemeral — reset on every deploy and roughly every 15 minutes
+    # of inactivity (free instances spin down and lose local disk state).
+    # Fine for verifying the wiring end-to-end; for real use, switch `plan`
+    # to a paid tier, uncomment the disk block below, AND add a DATA_DIR
+    # env var set to /var/data (matching mountPath) so the app writes to
+    # the persisted disk instead of the ephemeral build directory:
     # disk:
     #   name: uae-reg-data
     #   mountPath: /var/data
