@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "UAE Reg",
+    "slug": "uae-reg",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#DAD5C4",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.uaereg.app"
+    },
+    "android": {
+      "package": "com.uaereg.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": ["POST_NOTIFICATIONS"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#2F5D50"
+        }
+      ]
+    ]
+  }
+}
