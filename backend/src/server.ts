@@ -7,6 +7,7 @@ import { registerDevice, unregisterDevice, notifyDevicesOfUpdate } from './push'
 import { toPublicUpdate, UpdateRecord, Category, UpdateAuthority, UpdateKind } from './types';
 import { runAllScrapers } from './scraper/run';
 import { ah } from './asyncHandler';
+import { auditRouter } from './audit/routes';
 
 const AUTHORITIES: UpdateAuthority[] = ['FTA', 'MoF', 'IASB/ISSB', 'MOHRE', 'ICP/GDRFA', 'Other'];
 const KINDS: UpdateKind[] = ['Guideline', 'Public Clarification', 'Decision', 'Notification'];
@@ -19,6 +20,10 @@ export function createServer() {
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, time: new Date().toISOString() });
   });
+
+  // --- Audit: ledger scrutiny, imports, accounting software connectors ---
+
+  app.use('/api/audit', auditRouter());
 
   // --- Public: what the mobile app reads --------------------------------
 

@@ -1,0 +1,5 @@
+Txn Date,GL Account,Narration,Ref No,Debit Amount,Credit Amount
+01/03/2026,Cash,"Sale, cash register",1001,1000.00,
+01/03/2026,Sales Revenue,"Sale, cash register",1002,,1000.00
+03/03/2026,Office Supplies,"Stationery order",1003,250.00,
+03/03/2026,Cash,"Stationery order",1004,,250.00

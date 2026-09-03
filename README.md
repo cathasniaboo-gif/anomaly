@@ -22,6 +22,16 @@ scale and card layout), expanded into a full four-tab native app.
   notification the first time the device sees a new item. Works fully offline against bundled
   seed data out of the box; point it at the backend in `backend/` (see below) for a live feed
   and real server-sent push.
+- **Audit** — connect the app to a self-hosted backend (see `backend/`) and run automated ledger
+  scrutiny: import a CSV export from any accounting package or spreadsheet, or connect
+  QuickBooks Online / Xero and sync its general ledger directly, and every transaction is run
+  through a rule-based scrutiny engine — balance check, duplicate postings, round-number bias, a
+  Benford's Law leading-digit test, reference-number sequence gaps, per-account statistical
+  outliers, incomplete entries, possible structuring near an approval threshold, weekend
+  postings, and future-dated entries. Findings are graded high/medium/low and drill down to the
+  exact entries behind each one. Off by default until a backend URL + admin key are entered in
+  Audit settings — see `backend/README.md`'s "Audit: ledger scrutiny" section for the API and
+  `backend/src/audit/connectors/README.md` for connecting an accounting package.
 - **About & sources** — scope, disclaimer, and links to the primary government/standard-setter
   sources.
 
@@ -67,13 +77,18 @@ src/
     notifications.ts           # expo-notifications wrapper (local notifications)
     updatesApi.ts               # fetches live updates from backend/, null on any failure
     pushRegistration.ts         # registers this device for real server-sent push
+    auditSettings.ts            # on-device audit backend URL + admin key (AsyncStorage only)
+    auditApi.ts                  # /api/audit/* client, admin-key gated
   context/
     UpdatesContext.tsx         # live fetch + fallback, unread tracking, notify-new-items logic
   navigation/                  # bottom tabs + per-tab stacks
   screens/                     # Home, Category, Detail, Search, Ask, Updates, About
+  screens/audit/                # Audit tab: settings, import, connect, ledger + finding detail
   components/UI.tsx            # shared cards/rows/pills styled from theme/theme.ts
+  components/AuditUI.tsx        # severity pills, finding-count chips, currency/date formatting
   theme/theme.ts                # colors/fonts ported from the reference CSS
-backend/                       # live FTA/MoF feed: scraper + review queue + push — see backend/README.md
+backend/                       # live FTA/MoF feed + audit ledger scrutiny — see backend/README.md
+  src/audit/                   # scrutiny rule engine, CSV importer, QuickBooks/Xero connectors
 ```
 
 ## Scope and disclaimer
