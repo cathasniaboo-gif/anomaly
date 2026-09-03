@@ -15,7 +15,12 @@ const KINDS: UpdateKind[] = ['Guideline', 'Public Clarification', 'Decision', 'N
 export function createServer() {
   const app = express();
   app.use(cors());
-  app.use(express.json({ limit: '256kb' }));
+  // The FTA/MoF admin routes only ever send small JSON bodies, but a
+  // ledger CSV embedded in an /api/audit/ledgers/import request can easily
+  // run to several MB for a real general ledger export — 256kb was fine
+  // for the former and silently rejected the latter (surfacing as a
+  // confusing generic 500, see the errorHandler note below).
+  app.use(express.json({ limit: '25mb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true, time: new Date().toISOString() });
@@ -181,6 +186,14 @@ export function createServer() {
   const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     console.error('[server] Unhandled error:', err);
     if (res.headersSent) return;
+    // body-parser's payload-too-large error otherwise surfaced as an
+    // opaque 500 — worth its own status/message so a client (or a person
+    // staring at the error) can tell "your file is too big" apart from
+    // "something actually broke".
+    if ((err as { type?: string })?.type === 'entity.too.large') {
+      res.status(413).json({ error: 'Request body too large — this file exceeds the server\'s upload size limit.' });
+      return;
+    }
     res.status(500).json({ error: 'Internal server error' });
   };
   app.use(errorHandler);
