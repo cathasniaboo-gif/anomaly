@@ -1,0 +1,3 @@
+date,account_name,transaction_details,transaction_id,reference_transaction_id,offset_account_id,offset_account_type,transaction_type,reference_number,entity_number,debit,credit,net_amount,contact_id,account_id,project_ids,currency_code,account_group,account_type,location_name
+2026-08-01,Cash,Client payment,TX-1001,,ACC-2001,liability,receipt,INV-3001,,1500.00,,1500.00,CONTACT-1,ACC-1001,,AED,asset,cash,Head Office
+2026-08-01,Revenue,Client payment,TX-1001,,ACC-1001,asset,receipt,INV-3001,,,1500.00,-1500.00,CONTACT-1,ACC-2001,,AED,income,revenue,Head Office

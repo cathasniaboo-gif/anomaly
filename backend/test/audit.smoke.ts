@@ -90,6 +90,29 @@ function testCsvImportSkipsReportTitleBlockAboveHeader() {
   console.log('✔ CSV import: report title block above the header row is correctly skipped');
 }
 
+function testCsvImportHandlesSnakeCaseApiStyleHeaders() {
+  // Found by hand-testing against a real Zoho Books raw CSV export: unlike
+  // the on-screen report (spaced, title-cased headers), the actual
+  // downloaded file uses snake_case API field names — "account_name",
+  // "reference_number", "net_amount" — with several irrelevant internal-id
+  // columns alongside them (e.g. "reference_transaction_id", which must
+  // NOT be picked over the real "reference_number" column).
+  const csv = loadFixture('sample-ledger-snake-case.csv');
+  const { entries, errors, columnsDetected } = parseCsvLedger(csv);
+  assert.deepStrictEqual(errors, [], `expected no import errors, got ${JSON.stringify(errors)}`);
+  assert.strictEqual(entries.length, 2);
+
+  const first = entries[0];
+  assert.strictEqual(first.account, 'Cash', '"account_name" should map to account');
+  assert.strictEqual(first.description, 'Client payment', '"transaction_details" should map to description');
+  assert.strictEqual(first.reference, 'INV-3001', '"reference_number" should win over "reference_transaction_id"');
+  assert.strictEqual(first.debit, 1500);
+  assert.strictEqual(first.credit, 0);
+  assert.strictEqual(columnsDetected.currency, 16, '"currency_code" should map to currency');
+
+  console.log('✔ CSV import: snake_case API-style headers (real Zoho Books export shape) resolved correctly');
+}
+
 function testCsvHeaderMatchingDoesNotFalsePositiveOnSubstrings() {
   // The short aliases "dr"/"cr" (for debit/credit) must not match inside
   // unrelated words like "Description" ("des-cr-iption") or "Currency"
@@ -222,6 +245,7 @@ function testFutureDatedEntry() {
 testCsvImportAliasedColumns();
 testCsvSingleAmountColumnWithParentheses();
 testCsvImportSkipsReportTitleBlockAboveHeader();
+testCsvImportHandlesSnakeCaseApiStyleHeaders();
 testCsvHeaderMatchingDoesNotFalsePositiveOnSubstrings();
 testCsvMissingRequiredColumns();
 testCleanBalancedLedgerHasNoFindings();

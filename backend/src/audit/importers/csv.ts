@@ -64,10 +64,13 @@ const HEADER_ALIASES: Record<Column, string[]> = {
   enteredBy: ['entered by', 'user', 'created by', 'posted by', 'raised by'],
 };
 
-// Strips trailing punctuation report tools commonly tack onto headers
-// ("Reference#", "Debit ($)") so it still matches a plain-text alias.
+// Normalizes snake_case/kebab-case API-style exports ("account_name",
+// "net_amount" — seen from a real Zoho Books raw CSV export) to
+// space-separated words, and strips trailing punctuation report tools
+// tack onto headers ("Reference#", "Debit ($)") — either way, so the
+// result still matches a plain-text alias.
 function normalizeHeader(h: string): string {
-  return h.trim().toLowerCase().replace(/[#:.]/g, '').replace(/\s+/g, ' ').trim();
+  return h.trim().toLowerCase().replace(/[_-]+/g, ' ').replace(/[#:.]/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function detectColumns(header: string[]): Partial<Record<Column, number>> {
@@ -81,7 +84,24 @@ function detectColumns(header: string[]): Partial<Record<Column, number>> {
     // check would match the alias "cr" inside "des-cr-iption".
     let idx = normalized.findIndex((h) => HEADER_ALIASES[col].includes(h));
     if (idx < 0) {
-      idx = normalized.findIndex((h) => h.length > 0 && HEADER_ALIASES[col].some((alias) => ` ${h} `.includes(` ${alias} `)));
+      // Among whole-word matches, prefer the longest alias matched (more
+      // specific) and, for equally specific aliases, the header closest
+      // in length to it (fewest extra words) — otherwise a real header
+      // like "reference_number" loses to an unrelated internal id field
+      // like "reference_transaction_id" just because it comes first.
+      let bestScore = -Infinity;
+      normalized.forEach((h, i) => {
+        if (!h) return;
+        const padded = ` ${h} `;
+        for (const alias of HEADER_ALIASES[col]) {
+          if (!padded.includes(` ${alias} `)) continue;
+          const score = alias.length - h.length;
+          if (score > bestScore) {
+            bestScore = score;
+            idx = i;
+          }
+        }
+      });
     }
     if (idx >= 0) map[col] = idx;
   }
