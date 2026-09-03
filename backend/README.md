@@ -71,6 +71,37 @@ All responses are JSON.
 | POST | `/api/admin/scrape/run` | trigger a scrape cycle immediately (in addition to the cron schedule) |
 | GET | `/api/admin/scrape/runs` | last 50 scrape run results, for diagnosing selector drift |
 
+### Audit: ledger scrutiny (require header `x-admin-key: <ADMIN_API_KEY>`, except the OAuth callback)
+
+A second, independent feature lives alongside the FTA/MoF feed: automated ledger scrutiny for
+the mobile app's **Audit** tab. `src/audit/scrutiny.ts` runs a fixed set of rule-based checks —
+balance, duplicate postings, weekend postings, round-number bias, a Benford's Law leading-digit
+test, reference-number sequence gaps, per-account statistical outliers, incomplete entries,
+possible structuring near an approval threshold, and future-dated entries — against any ledger,
+whether it arrived as a manually imported CSV or a synced accounting-software connection. Run
+`npm run smoke:audit` to see every rule fire against synthetic fixtures.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/api/audit/rules` | the rule catalogue (id/title/severity/description), for the app to explain what it checks for |
+| POST | `/api/audit/ledgers/import` | `{ name, csv }` — parses the CSV (flexible header aliases: Date/Account/Description/Reference/Debit/Credit or a single signed Amount column), runs scrutiny, stores the result |
+| GET | `/api/audit/ledgers` | list, newest first, findings/entries stripped |
+| GET | `/api/audit/ledgers/:id` | full record: entries, findings, summary |
+| POST | `/api/audit/ledgers/:id/rescan` | re-run the current rules against stored entries (e.g. after a rule change) |
+| DELETE | `/api/audit/ledgers/:id` | remove |
+| GET | `/api/audit/connectors` | QuickBooks Online / Xero: configured?, connected?, company name |
+| GET | `/api/audit/connectors/:id/auth-url` | mints a single-use OAuth `state` and returns the provider's authorize URL |
+| GET | `/api/audit/connectors/:id/callback` | **not** admin-key gated — reached by the provider's own browser redirect; validated by the single-use `state` token instead |
+| POST | `/api/audit/connectors/:id/sync` | fetches the connected company's ledger, runs scrutiny, stores a new snapshot |
+| DELETE | `/api/audit/connectors/:id` | disconnect |
+
+**The two accounting-software connectors (QuickBooks Online, Xero) carry the same caveat as the
+FTA/MoF scraper above**: built against each provider's public API reference, not exercised
+against a live company/org, because this sandbox has no outbound network access to Intuit's or
+Xero's endpoints either. See `src/audit/connectors/README.md` for the setup steps and exactly
+what's unverified. Manual CSV import and the scrutiny engine itself have no such gap — both are
+fully exercised by `npm run smoke:audit`.
+
 ## Running it
 
 ```bash

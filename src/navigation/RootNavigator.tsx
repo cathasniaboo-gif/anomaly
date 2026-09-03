@@ -7,6 +7,7 @@ import {
   HomeStackParamList,
   AskStackParamList,
   UpdatesStackParamList,
+  AuditStackParamList,
   AboutStackParamList,
   MainTabParamList,
 } from './types';
@@ -21,10 +22,17 @@ import AskScreen from '../screens/AskScreen';
 import UpdatesListScreen from '../screens/UpdatesListScreen';
 import UpdateDetailScreen from '../screens/UpdateDetailScreen';
 import AboutScreen from '../screens/AboutScreen';
+import AuditHomeScreen from '../screens/audit/AuditHomeScreen';
+import AuditSettingsScreen from '../screens/audit/AuditSettingsScreen';
+import ImportLedgerScreen from '../screens/audit/ImportLedgerScreen';
+import ConnectAccountingScreen from '../screens/audit/ConnectAccountingScreen';
+import LedgerDetailScreen from '../screens/audit/LedgerDetailScreen';
+import FindingDetailScreen from '../screens/audit/FindingDetailScreen';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 const AskStack = createNativeStackNavigator<AskStackParamList>();
 const UpdatesStack = createNativeStackNavigator<UpdatesStackParamList>();
+const AuditStack = createNativeStackNavigator<AuditStackParamList>();
 const AboutStack = createNativeStackNavigator<AboutStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -60,6 +68,19 @@ function UpdatesStackNavigator() {
       <UpdatesStack.Screen name="UpdatesList" component={UpdatesListScreen} options={{ title: 'Updates' }} />
       <UpdatesStack.Screen name="UpdateDetail" component={UpdateDetailScreen} />
     </UpdatesStack.Navigator>
+  );
+}
+
+function AuditStackNavigator() {
+  return (
+    <AuditStack.Navigator screenOptions={headerOptions}>
+      <AuditStack.Screen name="AuditHome" component={AuditHomeScreen} options={{ title: 'Audit' }} />
+      <AuditStack.Screen name="AuditSettings" component={AuditSettingsScreen} options={{ title: 'Audit settings' }} />
+      <AuditStack.Screen name="ImportLedger" component={ImportLedgerScreen} options={{ title: 'Import ledger' }} />
+      <AuditStack.Screen name="ConnectAccounting" component={ConnectAccountingScreen} options={{ title: 'Connect accounting software' }} />
+      <AuditStack.Screen name="LedgerDetail" component={LedgerDetailScreen} />
+      <AuditStack.Screen name="FindingDetail" component={FindingDetailScreen} />
+    </AuditStack.Navigator>
   );
 }
 
@@ -138,6 +159,14 @@ export default function RootNavigator() {
         options={{
           title: 'Updates',
           tabBarIcon: ({ color, size }) => <UpdatesTabIcon color={color} size={size} />,
+        }}
+      />
+      <Tab.Screen
+        name="AuditTab"
+        component={AuditStackNavigator}
+        options={{
+          title: 'Audit',
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="shield-search" size={size} color={color} />,
         }}
       />
       <Tab.Screen

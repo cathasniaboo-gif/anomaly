@@ -16,7 +16,7 @@ function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-class JsonCollection<T> {
+export class JsonCollection<T> {
   private filePath: string;
   private cache: T[] | null = null;
   private writeQueue: Promise<void> = Promise.resolve();

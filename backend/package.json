@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js",
     "scrape:once": "ts-node src/scraper/run.ts",
-    "smoke:scraper": "ts-node test/scraper.smoke.ts"
+    "smoke:scraper": "ts-node test/scraper.smoke.ts",
+    "smoke:audit": "ts-node test/audit.smoke.ts"
   },
   "dependencies": {
     "cheerio": "^1.0.0",
