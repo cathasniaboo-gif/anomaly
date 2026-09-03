@@ -23,7 +23,7 @@ function formatDate(iso: string) {
 }
 
 export default function UpdatesListScreen({ navigation }: Props) {
-  const { updates, isRead, markRead, markAllRead, unreadCount, refresh, refreshing, isLive } = useUpdates();
+  const { updates, isRead, markRead, markAllRead, unreadCount, refresh, refreshing, connectionState } = useUpdates();
 
   React.useLayoutEffect(() => {
     navigation.setOptions({
@@ -54,9 +54,27 @@ export default function UpdatesListScreen({ navigation }: Props) {
               setters — with a plain-English summary of what each one actually changes.
             </Text>
             <View style={styles.liveRow}>
-              <View style={[styles.liveDot, { backgroundColor: isLive ? colors.teal : colors.textSecondary }]} />
+              <View
+                style={[
+                  styles.liveDot,
+                  {
+                    backgroundColor:
+                      connectionState === 'live'
+                        ? colors.teal
+                        : connectionState === 'offline'
+                        ? colors.danger
+                        : colors.textSecondary,
+                  },
+                ]}
+              />
               <Text style={styles.liveText}>
-                {isLive ? 'Live from backend' : HAS_BACKEND ? 'Connecting…' : 'Bundled offline data (no backend configured)'}
+                {!HAS_BACKEND
+                  ? 'Bundled offline data (no backend configured)'
+                  : connectionState === 'live'
+                  ? 'Live from backend'
+                  : connectionState === 'checking'
+                  ? 'Connecting…'
+                  : 'Offline — showing bundled data (pull to retry)'}
               </Text>
             </View>
           </View>

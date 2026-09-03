@@ -9,7 +9,11 @@ export async function fetchRemoteUpdates(): Promise<RegUpdate[] | null> {
   if (!HAS_BACKEND) return null;
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    // Free-tier hosts (e.g. Render's free plan) spin down when idle and can
+    // take 30-60s to wake back up on the next request — a short timeout
+    // here would abort a perfectly healthy cold-starting backend and fall
+    // back to bundled data even though the real fetch was about to succeed.
+    const timer = setTimeout(() => controller.abort(), 60000);
     const res = await fetch(`${API_BASE_URL}/api/updates`, {
       headers: { Accept: 'application/json' },
       signal: controller.signal,

@@ -10,6 +10,12 @@ import { HAS_BACKEND } from '../config';
 const SEEN_KEY = 'uaereg:seenUpdateIds:v1';
 const NOTIFIED_KEY = 'uaereg:notifiedUpdateIds:v1';
 
+// 'checking' only while a fetch is actually in flight — distinct from
+// 'offline', which means the last attempt failed (or timed out) and the
+// app fell back to bundled data. Conflating the two made the UI claim it
+// was still "Connecting…" indefinitely after a fetch had already given up.
+export type ConnectionState = 'checking' | 'live' | 'offline';
+
 interface UpdatesContextValue {
   updates: RegUpdate[];
   unreadCount: number;
@@ -19,7 +25,7 @@ interface UpdatesContextValue {
   loading: boolean;
   refreshing: boolean;
   refresh: () => Promise<void>;
-  isLive: boolean; // true once a successful backend fetch has replaced the bundled seed
+  connectionState: ConnectionState;
 }
 
 const UpdatesContext = createContext<UpdatesContextValue | null>(null);
@@ -49,7 +55,7 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
   const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [isLive, setIsLive] = useState(false);
+  const [connectionState, setConnectionState] = useState<ConnectionState>('checking');
   const notifiedRef = useRef<Set<string>>(new Set());
 
   const notifyForNewItems = useCallback(async (list: RegUpdate[]) => {
@@ -66,13 +72,16 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
   const refresh = useCallback(async () => {
     if (!HAS_BACKEND) return;
     setRefreshing(true);
+    setConnectionState('checking');
     try {
       const remote = await fetchRemoteUpdates();
       if (remote && remote.length >= 0) {
         const sorted = [...remote].sort((a, b) => (a.date < b.date ? 1 : -1));
         setUpdates(sorted);
-        setIsLive(true);
+        setConnectionState('live');
         await notifyForNewItems(sorted);
+      } else {
+        setConnectionState('offline');
       }
     } finally {
       setRefreshing(false);
@@ -137,7 +146,7 @@ export function UpdatesProvider({ children }: { children: React.ReactNode }) {
     loading,
     refreshing,
     refresh,
-    isLive,
+    connectionState,
   };
 
   return <UpdatesContext.Provider value={value}>{children}</UpdatesContext.Provider>;
