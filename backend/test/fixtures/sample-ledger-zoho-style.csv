@@ -1,0 +1,9 @@
+Detailed General Ledger
+Basis : Accrual
+From 01 Aug 2026 To 31 Aug 2026
+
+Date,Account,Transaction Details,Transaction Type,Transaction#,Reference#,Debit,Credit,Amount
+01/08/2026,Cash,Client payment,Receipt,TXN-001,REF-001,1000.00,,1000.00
+01/08/2026,Sales,Client payment,Receipt,TXN-001,REF-001,,1000.00,-1000.00
+05/08/2026,Rent Expense,Office rent,Journal,TXN-002,REF-002,3500.00,,3500.00
+05/08/2026,Cash,Office rent,Journal,TXN-002,REF-002,,3500.00,-3500.00

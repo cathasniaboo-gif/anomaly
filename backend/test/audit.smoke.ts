@@ -70,6 +70,40 @@ function testCsvSingleAmountColumnWithParentheses() {
   console.log('✔ CSV import: single signed Amount column with parentheses-as-negative handled');
 }
 
+function testCsvImportSkipsReportTitleBlockAboveHeader() {
+  // Found by hand-testing against a real Zoho Books "Detailed General
+  // Ledger" export: it prepends a title/basis/date-range block above the
+  // actual column-header row, and puts a "#" on headers like "Reference#".
+  const csv = loadFixture('sample-ledger-zoho-style.csv');
+  const { entries, errors } = parseCsvLedger(csv);
+  assert.deepStrictEqual(errors, [], `expected no import errors, got ${JSON.stringify(errors)}`);
+  assert.strictEqual(entries.length, 4, `expected 4 entries (title block correctly skipped), got ${entries.length}`);
+
+  const first = entries[0];
+  assert.strictEqual(first.date, '2026-08-01', `expected dd/mm/yyyy "01/08/2026" parsed to 2026-08-01, got ${first.date}`);
+  assert.strictEqual(first.account, 'Cash');
+  assert.strictEqual(first.description, 'Client payment', '"Transaction Details" should map to description');
+  assert.strictEqual(first.reference, 'REF-001', '"Reference#" should map to reference despite the trailing #');
+  assert.strictEqual(first.debit, 1000);
+  assert.strictEqual(first.credit, 0);
+
+  console.log('✔ CSV import: report title block above the header row is correctly skipped');
+}
+
+function testCsvHeaderMatchingDoesNotFalsePositiveOnSubstrings() {
+  // The short aliases "dr"/"cr" (for debit/credit) must not match inside
+  // unrelated words like "Description" ("des-cr-iption") or "Currency"
+  // ("cur-r-ency" has no "cr" as a whole word either) via the whole-word
+  // fallback matching added for report-export header variants.
+  const csv = 'Date,Account,Description,Amount\n2026-03-04,Bank,Deposit,500.00\n2026-03-04,Bank,Refund,(120.00)\n';
+  const { entries, errors, columnsDetected } = parseCsvLedger(csv);
+  assert.deepStrictEqual(errors, []);
+  assert.strictEqual(columnsDetected.credit, undefined, '"cr" must not match inside "Description"');
+  assert.strictEqual(entries[0].debit, 500, 'Amount column should still resolve debit correctly');
+  assert.strictEqual(entries[1].credit, 120, 'parenthesised Amount should still resolve as a credit');
+  console.log('✔ CSV import: short aliases ("dr"/"cr") do not false-positive inside unrelated header words');
+}
+
 function testCsvMissingRequiredColumns() {
   const csv = 'Foo,Bar\n1,2\n';
   const { entries, errors } = parseCsvLedger(csv);
@@ -187,6 +221,8 @@ function testFutureDatedEntry() {
 
 testCsvImportAliasedColumns();
 testCsvSingleAmountColumnWithParentheses();
+testCsvImportSkipsReportTitleBlockAboveHeader();
+testCsvHeaderMatchingDoesNotFalsePositiveOnSubstrings();
 testCsvMissingRequiredColumns();
 testCleanBalancedLedgerHasNoFindings();
 testUnbalancedLedger();
